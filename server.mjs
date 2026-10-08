@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { createAvatarRoute, sendJson } from './server/http.js';
 
 export function createBackendServer(options = {}) {
-  const route = createAvatarRoute(options);
+  const route = createAvatarRoute({ serviceInfoRoot: true, ...options });
   const server = http.createServer(async (req, res) => {
     try {
       if (await route(req, res, new URL(req.url, 'http://localhost'))) return;

@@ -56,6 +56,7 @@ export async function analyzeAvatar({ image } = {}, options = {}) {
       signal: controller.signal,
       body: JSON.stringify({
         model, store: false, max_output_tokens: 1000,
+        ...(model === 'gpt-6-luna' || model.startsWith('gpt-6-luna-') ? { reasoning: { effort: 'none' } } : {}),
         instructions: AVATAR_INSTRUCTIONS,
         input: [{ role: 'user', content: [
           { type: 'input_text', text: 'Map the visible appearance in this authorized photo to an approximate pixel avatar.' },

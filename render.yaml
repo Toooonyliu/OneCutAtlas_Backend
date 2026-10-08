@@ -3,6 +3,8 @@ services:
     name: one-cut-atlas-api
     runtime: node
     plan: free
+    repo: https://github.com/Toooonyliu/OneCutAtlas_Backend
+    branch: main
     buildCommand: npm install --omit=dev
     startCommand: npm start
     healthCheckPath: /health
@@ -12,12 +14,16 @@ services:
       - key: HOST
         value: 0.0.0.0
       - key: ALLOWED_ORIGINS
-        value: https://toooonyliu.github.io,http://localhost:4173,http://127.0.0.1:4173
+        value: https://toooonyliu.github.io
       - key: OPENAI_API_KEY
         sync: false
       - key: OPENAI_MODEL
-        sync: false
+        value: gpt-6-luna
       - key: AI_PER_MINUTE
         value: "5"
       - key: AI_MAX_CALLS
         value: "50"
+      - key: AI_MAX_CONCURRENT
+        value: "2"
+      - key: AI_REQUIRE_ORIGIN
+        value: "true"
