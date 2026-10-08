@@ -106,7 +106,7 @@ test('HTTP unavailable mode returns no image, private key or configuration value
     const response = await fetch(`${base}/api/analyze-avatar`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image: png }) });
     assert.equal(response.status, 503);
     const body = await response.text();
-    assert.match(body, /本地/);
+  assert.match(body, /local/i);
     assert.equal(body.includes(png), false);
     assert.deepEqual(Object.keys(JSON.parse(body)), ['error']);
   });

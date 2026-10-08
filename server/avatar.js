@@ -25,11 +25,11 @@ const exactKeys = (value, keys) => value && typeof value === 'object' && !Array.
 
 // The provider's schema is also checked at our own boundary before reaching the renderer.
 export function validateModelAvatar(value) {
-  if (!exactKeys(value, AVATAR_SCHEMA.required)) throw fail('AI 返回的角色格式不完整，请保留本地预览。', 502);
+  if (!exactKeys(value, AVATAR_SCHEMA.required)) throw fail('AI returned an incomplete avatar. Your local preview is unchanged.', 502);
   const colors = ['hair', 'skin', 'outfit', 'accent'];
-  if (!exactKeys(value.palette, colors) || colors.some(key => typeof value.palette[key] !== 'string' || !/^#[0-9a-f]{6}$/i.test(value.palette[key]))) throw fail('AI 返回的角色配色无效，请保留本地预览。', 502);
-  if (!AVATAR_STYLES.includes(value.style) || !HAIR_STYLES.includes(value.hairStyle)) throw fail('AI 返回了不支持的角色外观，请保留本地预览。', 502);
-  if (typeof value.summary !== 'string' || !value.summary.trim() || value.summary.length > 240) throw fail('AI 返回的角色说明无效，请保留本地预览。', 502);
+  if (!exactKeys(value.palette, colors) || colors.some(key => typeof value.palette[key] !== 'string' || !/^#[0-9a-f]{6}$/i.test(value.palette[key]))) throw fail('AI returned invalid colors. Your local preview is unchanged.', 502);
+  if (!AVATAR_STYLES.includes(value.style) || !HAIR_STYLES.includes(value.hairStyle)) throw fail('AI returned an unsupported appearance. Your local preview is unchanged.', 502);
+  if (typeof value.summary !== 'string' || !value.summary.trim() || value.summary.length > 240) throw fail('AI returned an invalid summary. Your local preview is unchanged.', 502);
   return {
     palette: Object.fromEntries(colors.map(key => [key, value.palette[key].toLowerCase()])),
     style: value.style, hairStyle: value.hairStyle, summary: value.summary.trim()
@@ -43,8 +43,8 @@ export async function analyzeAvatar({ image } = {}, options = {}) {
   validateImageData(image);
   const apiKey = options.apiKey ?? process.env.OPENAI_API_KEY;
   const model = options.model ?? process.env.OPENAI_MODEL;
-  if (!apiKey) throw fail('AI 尚未配置。你可以继续使用本地照片配色和手动角色设置。', 503);
-  if (typeof model !== 'string' || !/^[A-Za-z0-9._:-]{1,120}$/.test(model)) throw fail('服务器尚未配置支持图片和结构化输出的 OPENAI_MODEL，请保留本地预览。', 503);
+  if (!apiKey) throw fail('AI is not configured. Local photo colors and manual customization still work.', 503);
+  if (typeof model !== 'string' || !/^[A-Za-z0-9._:-]{1,120}$/.test(model)) throw fail('The server needs an OPENAI_MODEL with image input and Structured Outputs. Your local preview is unchanged.', 503);
   const fetcher = options.fetch || globalThis.fetch;
   const controller = new AbortController();
   const timeoutMs = Math.max(1, Math.min(25_000, Number(options.timeoutMs) || 25_000));
@@ -65,23 +65,23 @@ export async function analyzeAvatar({ image } = {}, options = {}) {
       })
     });
     if (!response.ok) {
-      if (response.status === 429) throw fail('AI 服务的额度或频率已达限制，请保留本地预览。', 429);
-      if ([401, 403].includes(response.status)) throw fail('AI 服务的密钥或模型权限不可用，请保留本地预览。', 503);
-      throw fail('AI 服务暂时不可用，请保留本地预览。', 502);
+      if (response.status === 429) throw fail('AI quota or rate limit reached. Your local preview is unchanged.', 429);
+      if ([401, 403].includes(response.status)) throw fail('AI key or model access is unavailable. Your local preview is unchanged.', 503);
+      throw fail('AI is temporarily unavailable. Your local preview is unchanged.', 502);
     }
     let payload;
-    try { payload = await response.json(); } catch { throw fail('AI 返回了无法读取的结果，请保留本地预览。', 502); }
-    if (payload.status !== 'completed' || !Array.isArray(payload.output)) throw fail('AI 没有完成分析，请保留本地预览。', 502);
+    try { payload = await response.json(); } catch { throw fail('AI returned an unreadable response. Your local preview is unchanged.', 502); }
+    if (payload.status !== 'completed' || !Array.isArray(payload.output)) throw fail('AI did not finish the analysis. Your local preview is unchanged.', 502);
     const content = payload.output.filter(item => item.type === 'message').flatMap(item => Array.isArray(item.content) ? item.content : []);
-    if (content.some(item => item.type === 'refusal')) throw fail('AI 无法分析这张照片，你仍可使用本地配色。', 422);
+    if (content.some(item => item.type === 'refusal')) throw fail('AI could not analyze this photo. Local photo colors still work.', 422);
     const outputText = content.filter(item => item.type === 'output_text').map(item => item.text).join('');
-    if (!outputText || outputText.length > 8000) throw fail('AI 返回的角色结果无效，请保留本地预览。', 502);
+    if (!outputText || outputText.length > 8000) throw fail('AI returned an invalid avatar. Your local preview is unchanged.', 502);
     let avatar;
-    try { avatar = JSON.parse(outputText); } catch { throw fail('AI 返回的角色不是有效 JSON，请保留本地预览。', 502); }
+    try { avatar = JSON.parse(outputText); } catch { throw fail('AI returned invalid JSON. Your local preview is unchanged.', 502); }
     return validateModelAvatar(avatar);
   } catch (error) {
-    if (controller.signal.aborted || error.name === 'AbortError') throw fail('AI 分析超时，请继续使用本地预览。', 504);
+    if (controller.signal.aborted || error.name === 'AbortError') throw fail('AI analysis timed out. Your local preview is unchanged.', 504);
     if (error.status) throw error;
-    throw fail('无法连接 AI 服务，请继续使用本地预览。', 502);
+    throw fail('Could not connect to AI. Your local preview is unchanged.', 502);
   } finally { clearTimeout(timer); }
 }

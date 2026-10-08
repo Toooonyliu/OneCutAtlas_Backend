@@ -1,10 +1,10 @@
 # One Cut Atlas avatar API
 
-This folder is the complete, dependency-free Node backend intended for [OneCutAtlas_Backend](https://github.com/Toooonyliu/OneCutAtlas_Backend). It is prepared locally; no cloud service or API credentials have been configured yet. Copy the **contents** of this folder to that repository's root when publishing.
+This is the dependency-free Node backend published in [OneCutAtlas_Backend](https://github.com/Toooonyliu/OneCutAtlas_Backend). The code is on GitHub, but the Render service, private API key, model selection and frontend service URL are still pending. Publishing code is not the same as deploying a working API.
 
 ## What it does
 
-`POST /api/analyze-avatar` maps an authorized photo to colors and one existing fictional fighter silhouette. This Level 1 approximation does not generate sprite sheets, reproduce a face, identify a person, or create accounts. The game can continue with locally sampled colors if analysis is unavailable.
+`POST /api/analyze-avatar` uses the OpenAI Responses API (`POST https://api.openai.com/v1/responses`) to analyze an authorized photo and return colors plus one existing fictional fighter silhouette. The game recolors an existing sprite; this Level 1 approximation does not generate sprite sheets, reproduce a face, identify a person, or create accounts. The game can continue with locally sampled colors if analysis is unavailable. No specific GPT model is active by default: configure a compatible model explicitly with `OPENAI_MODEL`.
 
 Request (`Content-Type: application/json`):
 
@@ -26,7 +26,7 @@ The image must be a JPEG, PNG, or WebP data URL, no larger than 2 MB after decod
 }
 ```
 
-`style` is `kendo`, `suit`, `cowboy`, or `traveler`. `hairStyle` is `short`, `long`, or `covered`. Failures return an HTTP error and `{"error":"..."}`. Keep the user's local configuration on failure. A missing key/model returns 503. `GET /health` reports readiness without revealing secrets.
+`style` is `kendo`, `suit`, `cowboy`, or `traveler`. `hairStyle` is `short`, `long`, or `covered`; it is returned as metadata but is not rendered by the current game client. Failures return an HTTP error and `{"error":"..."}`. Keep the user's local configuration on failure. A missing key/model returns 503. `GET /health` reports configuration presence without revealing secrets; `avatarAnalysisConfigured: true` is not proof of valid billing, provider access or model compatibility.
 
 ## Local checks and configuration
 
@@ -47,10 +47,10 @@ The limits are an initial demo budget guard, not durable per-user quotas or auth
 
 ## Render setup when credentials are ready
 
-1. Publish these files to the backend repository.
+1. Use the published backend repository.
 2. Create a Render web service from the repository, or use its `render.yaml` Blueprint. Use Node, `npm install --omit=dev`, `npm start`, and `/health`.
 3. Set `OPENAI_API_KEY` and `OPENAI_MODEL` privately in Render. Keep the allowed frontend origin `https://toooonyliu.github.io`.
-4. Check `/health`, then configure the frontend with the HTTPS service URL. Test one authorized photo and also the unavailable-service fallback.
+4. Check `/health`, then configure the frontend with the HTTPS service URL in its `one-cut-api-base` meta tag. Before calling the service ready, complete a real smoke test with one authorized photo and verify the returned palette and silhouette in the game. Also test the unavailable-service fallback. The existing automated tests use a mocked provider, not a live OpenAI request.
 
 This repository has no uploaded photos, user accounts, database, or cloud history. The application handles a photo only in memory and does not log or persist the request. It sends the compressed image to OpenAI for analysis. `store:false` disables storage of the Responses API response as application state; it does not promise that provider abuse-monitoring retention is disabled. Review the provider's [data controls](https://developers.openai.com/api/docs/guides/your-data) before sharing the feature widely.
 

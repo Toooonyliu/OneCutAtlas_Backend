@@ -42,13 +42,13 @@ function dimensions(bytes, mime) {
 }
 
 export function validateImageData(image) {
-  if (typeof image !== 'string' || image.length > Math.ceil(MAX_API_IMAGE_BYTES / 3) * 4 + 64) throw fail('照片数据太大或格式不正确，请重新上传。', 413);
+  if (typeof image !== 'string' || image.length > Math.ceil(MAX_API_IMAGE_BYTES / 3) * 4 + 64) throw fail('Photo data is too large or invalid. Upload again.', 413);
   const match = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/]+={0,2})$/.exec(image);
-  if (!match || match[2].length % 4 !== 0) throw fail('仅接受压缩后的 JPEG、PNG 或 WebP 图片。');
+  if (!match || match[2].length % 4 !== 0) throw fail('Use a compressed JPEG, PNG or WebP image.');
   const bytes = Buffer.from(match[2], 'base64');
-  if (!bytes.length || bytes.length > MAX_API_IMAGE_BYTES) throw fail('压缩后的照片不能超过 2 MB。', 413);
-  if (bytes.toString('base64') !== match[2] || imageMime(bytes) !== match[1]) throw fail('照片内容与声明格式不一致。');
+  if (!bytes.length || bytes.length > MAX_API_IMAGE_BYTES) throw fail('Compressed photo must be no larger than 2 MB.', 413);
+  if (bytes.toString('base64') !== match[2] || imageMime(bytes) !== match[1]) throw fail('Photo content does not match its declared format.');
   const size = dimensions(bytes, match[1]);
-  if (!size || size.width < 1 || size.height < 1 || size.width * size.height > MAX_IMAGE_PIXELS) throw fail('照片尺寸无效，请重新导出后上传。');
+  if (!size || size.width < 1 || size.height < 1 || size.width * size.height > MAX_IMAGE_PIXELS) throw fail('Photo dimensions are invalid. Export it again before uploading.');
   return image;
 }

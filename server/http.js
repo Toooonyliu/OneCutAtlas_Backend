@@ -17,16 +17,16 @@ function allowedOrigins(value) {
 }
 
 function readBody(req) {
-  if (Number(req.headers['content-length']) > MAX_BODY_BYTES) { req.resume(); return Promise.reject(fail('图片太大，请压缩后重试。', 413)); }
+  if (Number(req.headers['content-length']) > MAX_BODY_BYTES) { req.resume(); return Promise.reject(fail('Image is too large. Compress it and try again.', 413)); }
   return new Promise((resolve, reject) => {
     const chunks = [];
     let size = 0;
     const cleanup = () => { req.off('data', onData); req.off('end', onEnd); req.off('error', onError); req.off('aborted', onAborted); };
-    const onError = () => { cleanup(); reject(fail('无法读取请求，请重试。', 400)); };
-    const onAborted = () => { cleanup(); reject(fail('上传已取消。', 400)); };
+    const onError = () => { cleanup(); reject(fail('Could not read the request. Try again.', 400)); };
+    const onAborted = () => { cleanup(); reject(fail('Upload canceled.', 400)); };
     const onData = chunk => {
       size += chunk.length;
-      if (size > MAX_BODY_BYTES) { cleanup(); req.resume(); reject(fail('图片太大，请压缩后重试。', 413)); }
+      if (size > MAX_BODY_BYTES) { cleanup(); req.resume(); reject(fail('Image is too large. Compress it and try again.', 413)); }
       else chunks.push(chunk);
     };
     const onEnd = () => { cleanup(); resolve(Buffer.concat(chunks).toString('utf8')); };
@@ -48,7 +48,7 @@ export function createAvatarRoute(options = {}) {
     res.setHeader('Referrer-Policy', 'no-referrer');
     const origin = req.headers.origin;
     const sameOrigin = options.allowSameOrigin && origin === `http://${req.headers.host}`;
-    if (origin && !origins.has(origin) && !sameOrigin) { sendJson(res, 403, { error: '这个网页来源未获允许。' }); return true; }
+    if (origin && !origins.has(origin) && !sameOrigin) { sendJson(res, 403, { error: 'This website origin is not allowed.' }); return true; }
     if (origin) { res.setHeader('Access-Control-Allow-Origin', origin); res.setHeader('Vary', 'Origin'); }
     if (url.pathname === '/health') {
       if (!['GET', 'HEAD'].includes(req.method)) sendJson(res, 405, { error: 'Use GET.' });
@@ -61,8 +61,8 @@ export function createAvatarRoute(options = {}) {
       else { res.writeHead(204, { 'Access-Control-Allow-Methods': 'POST', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Max-Age': '600' }); res.end(); }
       return true;
     }
-    if (req.method !== 'POST') { res.setHeader('Allow', 'POST, OPTIONS'); sendJson(res, 405, { error: '请使用 POST 请求。' }); return true; }
-    if (!/^application\/json(?:\s*;|$)/i.test(String(req.headers['content-type']))) { sendJson(res, 415, { error: '请发送 JSON 图片数据。' }); return true; }
+    if (req.method !== 'POST') { res.setHeader('Allow', 'POST, OPTIONS'); sendJson(res, 405, { error: 'Use POST.' }); return true; }
+    if (!/^application\/json(?:\s*;|$)/i.test(String(req.headers['content-type']))) { sendJson(res, 415, { error: 'Send image data as JSON.' }); return true; }
     try {
       const now = Date.now();
       // Prune stale timestamps and cap bookkeeping without retaining request bodies.
@@ -72,15 +72,15 @@ export function createAvatarRoute(options = {}) {
       }
       const ip = req.socket.remoteAddress || 'unknown';
       const recent = limits.get(ip) || [];
-      if (recent.length >= perMinute || calls >= maxCalls || (limits.size >= 10_000 && !limits.has(ip))) throw fail('分析次数已达限制，请稍后再试或使用本地预览。', 429);
+      if (recent.length >= perMinute || calls >= maxCalls || (limits.size >= 10_000 && !limits.has(ip))) throw fail('Analysis limit reached. Try later or keep your local preview.', 429);
       let data;
-      try { data = JSON.parse(await readBody(req)); } catch (error) { if (error.status) throw error; throw fail('请求内容不是有效 JSON。', 400); }
-      if (!data || typeof data !== 'object' || Array.isArray(data) || Object.keys(data).length !== 1 || !Object.hasOwn(data, 'image')) throw fail('请仅发送 image 照片字段。', 400);
+      try { data = JSON.parse(await readBody(req)); } catch (error) { if (error.status) throw error; throw fail('Request body is not valid JSON.', 400); }
+      if (!data || typeof data !== 'object' || Array.isArray(data) || Object.keys(data).length !== 1 || !Object.hasOwn(data, 'image')) throw fail('Send only the image field.', 400);
       recent.push(now); limits.set(ip, recent); calls++;
       sendJson(res, 200, { avatar: await analyzer(data, options.provider), source: 'ai' });
     } catch (error) {
       if (error.status === 429) res.setHeader('Retry-After', '60');
-      sendJson(res, error.status || 500, { error: error.status ? error.message : '暂时无法分析，请保留本地预览。' });
+      sendJson(res, error.status || 500, { error: error.status ? error.message : 'Analysis is unavailable. Your local preview is unchanged.' });
     }
     return true;
   };
