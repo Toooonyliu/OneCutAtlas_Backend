@@ -1,6 +1,8 @@
 # One Cut Atlas avatar API
 
-This is the dependency-free Node backend published in [OneCutAtlas_Backend](https://github.com/Toooonyliu/OneCutAtlas_Backend). The recommended deployment is a Render Free web service with OpenAI GPT-6 Luna for bounded photo-to-avatar appearance analysis. The repository is prepared for that deployment, but account connection, a private API key, the actual service URL and a live provider test are still pending. Publishing code is not the same as deploying a working API.
+This is the dependency-free Node backend published in [OneCutAtlas_Backend](https://github.com/Toooonyliu/OneCutAtlas_Backend). It is deployed as a Render Free web service with OpenAI GPT-6 Luna for bounded photo-to-avatar appearance analysis.
+
+**Live backend:** [https://one-cut-atlas-api.onrender.com](https://one-cut-atlas-api.onrender.com). Use this origin in the assignment's backend URL field. `GET /` describes the service and `GET /health` reports configuration presence. On October 8, 2026, a real compressed fictional-game-image request returned HTTP 200 with `source: ai`, palette colors and an outfit style. The project's private key is configured only in Render's environment settings; no key belongs in this repository or the frontend.
 
 [Deploy the backend to Render](https://render.com/deploy?repo=https%3A%2F%2Fgithub.com%2FToooonyliu%2FOneCutAtlas_Backend)
 
@@ -66,4 +68,4 @@ The Render scaffold follows its [Blueprint YAML reference](https://render.com/do
 
 The request format follows the official [image-input guide](https://developers.openai.com/api/docs/guides/images-vision?api-mode=responses), [Structured Outputs guide](https://developers.openai.com/api/docs/guides/structured-outputs?api-mode=responses), and [Responses migration guide](https://developers.openai.com/api/docs/guides/migrate-to-responses). The adapter validates the result again before returning it to the game.
 
-Model choice follows the current [GPT-6 Luna model documentation](https://developers.openai.com/api/docs/models/gpt-6-luna): image input and Structured Outputs, with a focused extraction workload. The Render configuration follows its [free-service limitations](https://render.com/docs/free) and [Deploy to Render guide](https://render.com/docs/deploy-to-render). Account access and a live successful request remain to be verified.
+Model choice follows the current [GPT-6 Luna model documentation](https://developers.openai.com/api/docs/models/gpt-6-luna): image input and Structured Outputs, with a focused extraction workload. The Render configuration follows its [free-service limitations](https://render.com/docs/free) and [Deploy to Render guide](https://render.com/docs/deploy-to-render). Live provider access was verified on October 8; availability and account credits can change, so the game retains its local fallback.
