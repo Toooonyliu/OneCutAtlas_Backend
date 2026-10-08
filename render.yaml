@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: one-cut-atlas-api
+    runtime: node
+    plan: free
+    buildCommand: npm install --omit=dev
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: HOST
+        value: 0.0.0.0
+      - key: ALLOWED_ORIGINS
+        value: https://toooonyliu.github.io,http://localhost:4173,http://127.0.0.1:4173
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        sync: false
+      - key: AI_PER_MINUTE
+        value: "5"
+      - key: AI_MAX_CALLS
+        value: "50"
