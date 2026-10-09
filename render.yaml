@@ -19,6 +19,20 @@ services:
         sync: false
       - key: OPENAI_MODEL
         value: gpt-6-luna
+      - key: OPENAI_IMAGE_MODEL
+        value: gpt-image-2
+      - key: SCENE_QUALITY
+        value: low
+      - key: SCENE_ENABLED
+        value: "true"
+      - key: SCENE_PER_HOUR
+        value: "3"
+      - key: SCENE_MAX_PER_DAY
+        value: "40"
+      - key: SCENE_MAX_CONCURRENT
+        value: "2"
+      - key: RECOGNIZE_PER_MINUTE
+        value: "5"
       - key: AI_PER_MINUTE
         value: "5"
       - key: AI_MAX_CALLS

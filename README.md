@@ -30,7 +30,25 @@ The image must be a JPEG, PNG, or WebP data URL, no larger than 2 MB after decod
 }
 ```
 
-`style` is `kendo`, `suit`, `cowboy`, or `traveler`. `hairStyle` is `short`, `long`, or `covered`; it is returned as metadata but is not rendered by the current game client. Failures return an HTTP error and `{"error":"..."}`. Keep the user's local configuration on failure. A missing key/model returns 503. `GET /health` reports configuration presence without revealing secrets; `avatarAnalysisConfigured: true` is not proof of valid billing, provider access or model compatibility.
+`style` is `kendo`, `suit`, `cowboy`, or `traveler`. `hairStyle` is `short`, `long`, or `covered`; it is returned as metadata but is not rendered by the current game client. Failures return an HTTP error and `{"error":"..."}`. Keep the user's local configuration on failure. A missing key/model returns 503. `GET /health` reports configuration presence without revealing secrets: `avatarAnalysisConfigured`, `placeRecognitionConfigured` and `arenaPaintingConfigured`. A `true` value is not proof of valid billing, provider access or model compatibility.
+
+## Photo arenas
+
+Two further routes turn an authorized travel photo into a duel stage. Both reuse the same key, origin rules and body limits as the avatar route.
+
+`POST /api/recognize-place` with `{"image":"data:image/jpeg;base64,...","zone":"east-asia"}` (zone optional, a hint from photo GPS or the player) asks the vision model to classify only the environment: landmark or place type, city and country when distinctive, interior or exterior, lighting, a short `scenePrompt` built from what is visible, and a travel `zone` from the game's eleven. People in the photo are ignored and never identified; text and logos are treated as untrusted image content. Response:
+
+```json
+{"place":{"recognized":true,"name":"Forbidden City","city":"Beijing","country":"China","zone":"east-asia","setting":"exterior","confidence":0.96,"elements":["red columns"],"lighting":"day","environment":"traditional_street","opponentStyle":"kendo","palette":{"sky":"#e8e9e7","accent":"#a85d32","ambient":"#555d5b"},"scenePrompt":"Empty palace courtyard ...","summary":"Forbidden City courtyard, Beijing."},"source":"ai"}
+```
+
+Recognition is a suggestion. In testing it ignored people reliably but matched a Guatemalan volcano to Mount Fuji, so the game always shows the result and lets the player change the zone before anything is painted.
+
+`POST /api/scenes` with `{"image","zone","scenePrompt","setting","lighting","placeName"}` paints one 1536×864 backdrop with the image model through `POST /v1/images/edits`, attaching the three shipped stages in `assets/style/` as style references. The prompt is the exact brief used for the shipped zone stages plus the validated scene slot, the player-confirmed region and the ground line at 78 percent of the height. The route answers `202 {"jobId"}` at once; `GET /api/scenes/{jobId}` returns `{"status":"queued"|"painting"|"done"|"failed"}` with `backdrop` (a WebP data URL) on success. Jobs live in memory for ten minutes; a restart forgets them and the client is told to paint again. The browser downsamples the result to the 480×270 grid with a 32-color palette, so `SCENE_QUALITY=low` is the default: in a side-by-side test it was indistinguishable from medium after pixelization at roughly a third of the cost.
+
+Measured on October 8, 2026 with `gpt-image-2`: about 16 s and $0.017 per low-quality painting including the reference images, 27 s and $0.046 at medium, plus a recognition call of roughly 1,100 tokens. `scripts/offline-style-test.mjs` reproduces the comparison; it is billable and reads the key from an env file that it never prints.
+
+Painting guards: `SCENE_ENABLED` switches the route off, `SCENE_PER_HOUR` limits paintings per address, `SCENE_MAX_PER_DAY` caps the whole service, `SCENE_MAX_CONCURRENT` bounds in-flight provider calls, and identical photo-plus-prompt requests are served from a ten-minute cache instead of billed again. These counters reset on restart; the prepaid provider balance and the project's usage limits are the real ceiling.
 
 ## Local checks and configuration
 
@@ -42,6 +60,11 @@ Environment variables:
 | --- | --- |
 | `OPENAI_API_KEY` | Private server-side OpenAI project key |
 | `OPENAI_MODEL` | Explicit model with image input and Structured Outputs; Blueprint chooses `gpt-6-luna`, no hidden adapter default |
+| `OPENAI_IMAGE_MODEL` | Image model for arena painting; Blueprint chooses `gpt-image-2`. Empty disables painting |
+| `SCENE_QUALITY` | `low` (default), `medium` or `high` for painted arenas |
+| `SCENE_ENABLED` | `false` switches arena painting off while recognition keeps working |
+| `SCENE_PER_HOUR` / `SCENE_MAX_PER_DAY` / `SCENE_MAX_CONCURRENT` | Painting caps: per address per hour (3), per service per day (40), in flight (2) |
+| `RECOGNIZE_PER_MINUTE` | Place recognition requests per address per minute, default 5 |
 | `PORT` / `HOST` | Render provides `PORT`; the service binds `0.0.0.0` by default |
 | `ALLOWED_ORIGINS` | Comma-separated exact origins, defaulting to the portfolio and localhost:4173 |
 | `AI_PER_MINUTE` | Per-IP request limit, default 5 per minute |

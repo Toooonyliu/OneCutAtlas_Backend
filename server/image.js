@@ -4,7 +4,7 @@ const MAX_IMAGE_PIXELS = 40_000_000;
 
 const fail = (message, status = 400) => Object.assign(new Error(message), { status });
 
-function imageMime(bytes) {
+export function imageMime(bytes) {
   if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return 'image/jpeg';
   if (bytes.length >= 8 && [137,80,78,71,13,10,26,10].every((value, i) => bytes[i] === value)) return 'image/png';
   if (bytes.length >= 12 && bytes.toString('ascii', 0, 4) === 'RIFF' && bytes.toString('ascii', 8, 12) === 'WEBP') return 'image/webp';

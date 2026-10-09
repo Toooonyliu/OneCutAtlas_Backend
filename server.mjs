@@ -1,12 +1,16 @@
 import http from 'node:http';
 import { fileURLToPath } from 'node:url';
 import { createAvatarRoute, sendJson } from './server/http.js';
+import { createSceneRoutes } from './server/scene-http.js';
 
 export function createBackendServer(options = {}) {
   const route = createAvatarRoute({ serviceInfoRoot: true, ...options });
+  const scenes = createSceneRoutes({ allowedOrigins: options.allowedOrigins, requireOrigin: options.requireOrigin, allowSameOrigin: options.allowSameOrigin, provider: options.provider, ...options.scenes });
   const server = http.createServer(async (req, res) => {
     try {
-      if (await route(req, res, new URL(req.url, 'http://localhost'))) return;
+      const url = new URL(req.url, 'http://localhost');
+      if (await route(req, res, url)) return;
+      if (await scenes(req, res, url)) return;
       sendJson(res, 404, { error: 'Not found.' });
     } catch { sendJson(res, 500, { error: 'Request unavailable.' }); }
   });

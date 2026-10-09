@@ -9,14 +9,14 @@ export function sendJson(res, status, data) {
   res.end(JSON.stringify(data));
 }
 
-function allowedOrigins(value) {
+export function allowedOrigins(value) {
   const list = Array.isArray(value) ? value : String(value).split(',');
   return new Set(list.map(item => item.trim()).filter(item => {
     try { const url = new URL(item); return ['http:', 'https:'].includes(url.protocol) && url.origin === item; } catch { return false; }
   }));
 }
 
-function readBody(req) {
+export function readBody(req) {
   if (Number(req.headers['content-length']) > MAX_BODY_BYTES) { req.resume(); return Promise.reject(fail('Image is too large. Compress it and try again.', 413)); }
   return new Promise((resolve, reject) => {
     const chunks = [];
@@ -57,10 +57,12 @@ export function createAvatarRoute(options = {}) {
     if (url.pathname === '/health' || serviceInfo) {
       if (!['GET', 'HEAD'].includes(req.method)) sendJson(res, 405, { error: 'Use GET.' });
       else {
-        const readiness = { status: 'ok', avatarAnalysisConfigured: Boolean(process.env.OPENAI_API_KEY && process.env.OPENAI_MODEL) };
+        const configured = Boolean(process.env.OPENAI_API_KEY && process.env.OPENAI_MODEL);
+        const painting = configured && Boolean(process.env.OPENAI_IMAGE_MODEL) && !['false', '0'].includes(String(process.env.SCENE_ENABLED ?? 'true').toLowerCase());
+        const readiness = { status: 'ok', avatarAnalysisConfigured: configured, placeRecognitionConfigured: configured, arenaPaintingConfigured: painting };
         sendJson(res, 200, url.pathname === '/health' ? readiness : {
           service: 'One Cut Atlas avatar API', ...readiness,
-          routes: { health: '/health', analyze: '/api/analyze-avatar' }
+          routes: { health: '/health', analyze: '/api/analyze-avatar', recognizePlace: '/api/recognize-place', scenes: '/api/scenes', scene: '/api/scenes/{jobId}' }
         });
       }
       return true;
