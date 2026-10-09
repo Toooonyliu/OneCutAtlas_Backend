@@ -1,101 +1,109 @@
-# One Cut Atlas avatar API
+# One Cut Atlas — backend
 
-This is the dependency-free Node backend published in [OneCutAtlas_Backend](https://github.com/Toooonyliu/OneCutAtlas_Backend). It is deployed as a Render Free web service with OpenAI GPT-6 Luna for bounded photo-to-avatar appearance analysis.
+The dependency-free Node service behind [One Cut Atlas](https://toooonyliu.github.io/projects/one-cut-atlas/), a pixel-art travel and sword-duel game. It turns a player's travel photo into a duel stage: it recognizes the place, then paints an original pixel-art arena of it. It also powers **AI Colors**, a fighter palette suggestion. API keys live only in this server's environment, never in the browser or this repository.
 
-**Live backend:** [https://one-cut-atlas-api.onrender.com](https://one-cut-atlas-api.onrender.com). Use this origin in the assignment's backend URL field. `GET /` describes the service and `GET /health` reports configuration presence. On October 8, 2026, a real compressed fictional-game-image request returned HTTP 200 with `source: ai`, palette colors and an outfit style. The project's private key is configured only in Render's environment settings; no key belongs in this repository or the frontend.
+**Live:** [one-cut-atlas-api.onrender.com](https://one-cut-atlas-api.onrender.com) (Render Free) ·
+**Frontend source:** [toooonyliu.github.io/projects/one-cut-atlas](https://github.com/Toooonyliu/toooonyliu.github.io/tree/main/projects/one-cut-atlas) ·
+[Deploy your own to Render](https://render.com/deploy?repo=https%3A%2F%2Fgithub.com%2FToooonyliu%2FOneCutAtlas_Backend)
 
-[Deploy the backend to Render](https://render.com/deploy?repo=https%3A%2F%2Fgithub.com%2FToooonyliu%2FOneCutAtlas_Backend)
+## How a photo becomes a stage
 
-## What it does
-
-`POST /api/analyze-avatar` uses the OpenAI Responses API (`POST https://api.openai.com/v1/responses`) to analyze an authorized photo and return colors plus one existing fictional fighter silhouette. The game recolors an existing sprite; this Level 1 approximation does not generate sprite sheets, reproduce a face, identify a person, or create accounts. The game can continue with locally sampled colors if analysis is unavailable. `render.yaml` explicitly selects `gpt-6-luna`; the adapter uses its documented `reasoning.effort: none` for this small extraction task. Other compatible models can be configured explicitly with `OPENAI_MODEL`. Model availability must be verified in the actual API project.
-
-Request (`Content-Type: application/json`):
-
-```json
-{"image":"data:image/jpeg;base64,..."}
+```
+browser                         this service                          OpenAI
+compress photo ──POST /api/recognize-place──▶ vision model, strict JSON ──▶ gpt-6-luna
+◀── place: name, city, zone, scene description
+globe unlocks the zone; player taps Challenge
+──POST /api/scenes──▶ 202 {jobId} ──▶ image edit with style references ──▶ gpt-image-2
+──GET /api/scenes/{jobId} (poll)──▶ {status:"done", backdrop}
+snap to 960×540, 48 colors; duel
 ```
 
-The image must be a JPEG, PNG, or WebP data URL, no larger than 2 MB after decoding. Compress it in the browser first. Remote URLs are rejected. Response:
+1. **Recognize.** The vision model works like a geolocation scout: it lists 3–6 visible clues first (architecture and materials, the script on signs, vegetation, road layout), then names the place, city, country, approximate coordinates, one of the game's eleven travel zones, interior or exterior, lighting, and a short scene description built only from what is visible. People in the photo are ignored and never described or identified. Sign text may be read as a clue but is never copied into the output, and nothing in the photo is treated as an instruction. Photo GPS, when the browser sends it, is treated as reliable. A "scan again" can exclude up to three earlier answers.
+2. **Paint.** The player's photo is not sent to the image model. It receives the exact brief used for the game's shipped stages, the validated scene description, the confirmed region, and the three shipped stages in `assets/style/` as style references. It returns a 1536×864 WebP. Painting runs as a polled job so a slow provider call never hits a proxy timeout; jobs live in memory for ten minutes.
+3. **Pixelize** happens in the browser, which snaps the painting to the game's grid and stores it with the stage, so replays never paint again.
 
-```json
-{
-  "avatar": {
-    "palette": {"hair":"#24212b","skin":"#d5a380","outfit":"#596c76","accent":"#c89d54"},
-    "style":"traveler",
-    "hairStyle":"short",
-    "summary":"An approximate traveler with a dark jacket and warm accessory colors."
-  },
-  "source":"ai"
-}
-```
+Measured with the developer's own photos on October 8–9, 2026: recognition at high image detail put eight of nine photos in the right city (low detail had misread Sapporo as Osaka; a volcano without signage stays unrecognized, which the game shows as an uncharted stage). A medium-quality painting took about 27 s and cost about $0.046 including the reference images; recognition is roughly 2,450 tokens per call.
 
-`style` is `kendo`, `suit`, `cowboy`, or `traveler`. `hairStyle` is `short`, `long`, or `covered`; it is returned as metadata but is not rendered by the current game client. Failures return an HTTP error and `{"error":"..."}`. Keep the user's local configuration on failure. A missing key/model returns 503. `GET /health` reports configuration presence without revealing secrets: `avatarAnalysisConfigured`, `placeRecognitionConfigured` and `arenaPaintingConfigured`. A `true` value is not proof of valid billing, provider access or model compatibility.
+## API
 
-## Photo arenas
+All photo routes take JSON with a JPEG, PNG or WebP data URL, at most 2 MB after decoding; remote URLs, mismatched formats and oversized dimensions are rejected before any provider call. Errors are `{"error":"..."}` with a matching HTTP status; provider details never reach the client.
 
-Two further routes turn an authorized travel photo into a duel stage. Both reuse the same key, origin rules and body limits as the avatar route.
-
-`POST /api/recognize-place` with `{"image":"data:image/jpeg;base64,...","zone":"east-asia"}` (zone optional, a hint from photo GPS or the player) asks the vision model to classify only the environment: landmark or place type, city and country when distinctive, interior or exterior, lighting, a short `scenePrompt` built from what is visible, and a travel `zone` from the game's eleven. People in the photo are ignored and never identified; text and logos are treated as untrusted image content. Response:
-
-```json
-{"place":{"recognized":true,"name":"Forbidden City","city":"Beijing","country":"China","zone":"east-asia","setting":"exterior","confidence":0.96,"elements":["red columns"],"lighting":"day","environment":"traditional_street","opponentStyle":"kendo","palette":{"sky":"#e8e9e7","accent":"#a85d32","ambient":"#555d5b"},"scenePrompt":"Empty palace courtyard ...","summary":"Forbidden City courtyard, Beijing."},"source":"ai"}
-```
-
-Recognition is a suggestion. In testing it ignored people reliably but matched a Guatemalan volcano to Mount Fuji, so the game always shows the result and lets the player change the zone before anything is painted.
-
-`POST /api/scenes` with `{"image","zone","scenePrompt","setting","lighting","placeName"}` paints one 1536×864 backdrop with the image model through `POST /v1/images/edits`, attaching the three shipped stages in `assets/style/` as style references. The prompt is the exact brief used for the shipped zone stages plus the validated scene slot, the player-confirmed region and the ground line at 78 percent of the height. The route answers `202 {"jobId"}` at once; `GET /api/scenes/{jobId}` returns `{"status":"queued"|"painting"|"done"|"failed"}` with `backdrop` (a WebP data URL) on success. Jobs live in memory for ten minutes; a restart forgets them and the client is told to paint again. The browser snaps the result onto the 960×540 world grid with a 48-color palette. At that grid medium quality keeps visibly more detail than low, so `SCENE_QUALITY=medium` is the default.
-
-Painter order: when `MODELSCOPE_API_KEY` is set, `/api/scenes` first paints through ModelScope API-Inference (a free daily quota, about 2,000 calls per account per day shared across models with lower per-model caps; the account must be bound to a real-name-verified Alibaba Cloud account). It sends only the text prompt and the public URLs of the game's own shipped stages as style references, never the player's photo, and downloads the result only from ModelScope or Alibaba Cloud storage hosts. On quota exhaustion or failure it falls back to OpenAI unless `SCENE_FALLBACK=none`. ModelScope's terms describe API-Inference as a non-profit service without SLA, so it suits this classroom demo rather than commercial use. The ModelScope request shape follows third-party integrations and needs one live check after the token is added.
-
-Recognition accuracy, October 9, 2026, nine of the developer's own travel photos with `gpt-6-luna`: low image detail placed six in the right city and misread Sapporo as Osaka; high detail (now the default, `RECOGNIZE_DETAIL=high`) placed eight, and a volcano without signage stayed unrecognized. High detail costs roughly 2,450 tokens per call instead of 1,350. Recognition also returns approximate coordinates, accepts photo GPS, and accepts up to three excluded places for a "scan again".
-
-Measured on October 8, 2026 with `gpt-image-2`: about 16 s and $0.017 per low-quality painting including the reference images, 27 s and $0.046 at medium, plus a recognition call of roughly 1,100 tokens. `scripts/offline-style-test.mjs` reproduces the comparison; it is billable and reads the key from an env file that it never prints.
-
-Painting guards: `SCENE_ENABLED` switches the route off, `SCENE_PER_HOUR` limits paintings per address, `SCENE_MAX_PER_DAY` caps the whole service, `SCENE_MAX_CONCURRENT` bounds in-flight provider calls, and identical photo-plus-prompt requests are served from a ten-minute cache instead of billed again. These counters reset on restart; the prepaid provider balance and the project's usage limits are the real ceiling.
-
-## Local checks and configuration
-
-Use Node 22 or newer. Run `npm test` and `npm start`. The standalone service defaults to port 4174. Node can load a local environment file with `node --env-file=.env server.mjs`; `.env` is ignored by Git. Do not paste a key into a prompt, commit it, or put it in the frontend.
-
-Environment variables:
-
-| Variable | Purpose |
+| Route | Purpose |
 | --- | --- |
-| `OPENAI_API_KEY` | Private server-side OpenAI project key |
-| `OPENAI_MODEL` | Explicit model with image input and Structured Outputs; Blueprint chooses `gpt-6-luna`, no hidden adapter default |
-| `OPENAI_IMAGE_MODEL` | Image model for arena painting; defaults to `gpt-image-2` when unset, an empty value disables painting |
-| `SCENE_QUALITY` | `medium` (default), `low` or `high` for OpenAI-painted arenas |
-| `MODELSCOPE_API_KEY` / `MODELSCOPE_IMAGE_MODEL` | Free painter first: ModelScope API-Inference token and model, default `Qwen/Qwen-Image-Edit-2509` |
-| `SCENE_PROVIDER` / `SCENE_FALLBACK` | `auto`, `modelscope` or `openai`; `openai` or `none` as the fallback |
-| `RECOGNIZE_DETAIL` / `RECOGNIZE_REASONING` | Vision image detail (`high` default) and reasoning effort (`none` default) |
-| `SCENE_ENABLED` | `false` switches arena painting off while recognition keeps working |
-| `SCENE_PER_HOUR` / `SCENE_MAX_PER_DAY` / `SCENE_MAX_CONCURRENT` | Painting caps: per address per hour (3), per service per day (40), in flight (2) |
-| `RECOGNIZE_PER_MINUTE` | Place recognition requests per address per minute, default 5 |
-| `PORT` / `HOST` | Render provides `PORT`; the service binds `0.0.0.0` by default |
-| `ALLOWED_ORIGINS` | Comma-separated exact origins, defaulting to the portfolio and localhost:4173 |
-| `AI_PER_MINUTE` | Per-IP request limit, default 5 per minute |
-| `AI_MAX_CALLS` | Total analysis attempts per server process, default 50; resets on restart |
-| `AI_MAX_CONCURRENT` | Maximum simultaneous provider calls, default 2 |
-| `AI_REQUIRE_ORIGIN` | Require an allowed browser Origin on photo requests; Blueprint sets true, local default false |
+| `GET /` · `GET /health` | Service info and configuration presence: `avatarAnalysisConfigured`, `placeRecognitionConfigured`, `arenaPaintingConfigured`. `true` means configured, not proof of billing or model access. |
+| `POST /api/recognize-place` | `{"image", "zone"?, "gps"?: {lat, lon}, "exclude"?: [names]}` → `{"place": {...}, "source": "ai"}` |
+| `POST /api/scenes` | `{"image", "zone", "scenePrompt", "setting", "lighting", "placeName"?}` → `202 {"jobId", "estimatedSeconds"}` |
+| `GET /api/scenes/{jobId}` | `{"status": "queued" \| "painting" \| "done" \| "failed", "backdrop"?, "error"?}`; 404 once expired |
+| `POST /api/analyze-avatar` | `{"image"}` → `{"avatar": {palette, style, hairStyle, summary}, "source": "ai"}` — four colors and one of the four existing outfits; no face reconstruction or sprite generation |
 
-The limits are initial demo guards, not durable per-user quotas or authentication. Call counters are reserved before invoking the provider and in-flight calls are bounded. They reset on process restart, including free-service sleep. An Origin requirement does not prevent a non-browser client from spoofing that header. The socket address limit is deliberately conservative behind a proxy; unverified forwarding headers are not trusted. Before broad promotion, add real abuse protection and durable quotas. Configure the API project's usage controls and billing alerts; do not assume an alert is a hard spending cap.
+Example place (the clues are from a real response; other values abridged):
 
-## Deploy and connect
+```json
+{"place":{"evidence":["Japanese kana and kanji appear on many illuminated commercial signs.","Snow piled beside wet pavement suggests a cold, snowy climate."],"recognized":true,"name":"Susukino Crossing","city":"Sapporo","country":"Japan","latitude":43.055,"longitude":141.353,"zone":"east-asia","setting":"exterior","confidence":0.98,"lighting":"night","environment":"modern_city","opponentStyle":"suit","palette":{"sky":"#141822","accent":"#d8402f","ambient":"#0d1016"},"scenePrompt":"Empty night crossing with tall neon billboards, wet asphalt and snow banks under a black sky.","summary":"Susukino Crossing, Sapporo."},"source":"ai"}
+```
 
-1. Sign in to Render, or connect its Codex integration. Use the deployment link above to import the published repository's `render.yaml`. Choose the Free compute service; no paid hosting upgrade is needed for the classroom demo.
-2. The Blueprint sets Node 22, `npm install --omit=dev`, `npm start`, `/health`, `OPENAI_MODEL=gpt-6-luna`, and the exact allowed origin `https://toooonyliu.github.io`.
-3. Set `OPENAI_API_KEY` in Render's private environment-variable field. Use a scoped OpenAI project key with the necessary model access and API billing. Never paste the key into chat, the repo, a frontend config or a screenshot. The deployment flow prompts for this unsynced secret.
-4. Deploy, then copy the actual service HTTPS URL from Render. Do not guess it from the service name. Verify `/health` from the frontend origin and check `avatarAnalysisConfigured`; that field only confirms configuration presence.
-5. Set the verified service origin in the frontend's `one-cut-api-base` meta tag and publish the frontend. The game warms `/health` before sending a compressed photo, shows wake-up/analysis status and does not automatically retry a potentially billable POST. Local colors remain available on failure.
-6. Complete one real authorized-image analysis and confirm the returned colors/outfit visibly update the fighter. Save, play, return and reload to verify persistence. Also test unavailable-service fallback. The automated provider tests are mocked and do not prove live billing or model access.
+Every model response is validated again here against a strict schema before it reaches the game: unknown fields, zones, colors or styles are rejected, and the scene description is limited to plain letters, digits and simple punctuation so it cannot carry markup or instructions into the painting prompt.
 
-Render's Free service sleeps after 15 idle minutes; waking takes about a minute. The startup wait is separate from the bounded provider request. Free hosting is suitable for this demonstration, not a production availability promise. GPT API calls are usage-billed; consult the current model pricing and account limits before enabling a public endpoint.
+## Cost and abuse guards
 
-This repository has no uploaded photos, user accounts, database, or cloud history. The application handles a photo only in memory and does not log or persist the request. It sends the compressed image to OpenAI for analysis. `store:false` disables storage of the Responses API response as application state; it does not promise that provider abuse-monitoring retention is disabled. Review the provider's [data controls](https://developers.openai.com/api/docs/guides/your-data) before sharing the feature widely.
+These are demo guards held in memory; they reset when the free service sleeps or restarts. The prepaid provider balance and the OpenAI project's usage limits are the real ceiling.
 
-The Render scaffold follows its [Blueprint YAML reference](https://render.com/docs/blueprint-spec) and [web-service configuration](https://render.com/docs/web-services). Private environment values are entered in Render when creating the service.
+- Painting: 3 per address per hour, 40 per service per day, 2 in flight, and identical photo-plus-prompt requests within ten minutes are served from cache instead of billed again. `SCENE_ENABLED=false` turns painting off while recognition keeps working.
+- Recognition: 5 per address per minute. AI Colors: 5 per address per minute and 50 per process.
+- Requests must come from an allowed browser origin in production (`AI_REQUIRE_ORIGIN=true`). This reduces casual misuse; it is not authentication, since a non-browser client can spoof the header.
+- Billable requests are never retried automatically, by the server or by the game client.
 
-The request format follows the official [image-input guide](https://developers.openai.com/api/docs/guides/images-vision?api-mode=responses), [Structured Outputs guide](https://developers.openai.com/api/docs/guides/structured-outputs?api-mode=responses), and [Responses migration guide](https://developers.openai.com/api/docs/guides/migrate-to-responses). The adapter validates the result again before returning it to the game.
+## Run locally
 
-Model choice follows the current [GPT-6 Luna model documentation](https://developers.openai.com/api/docs/models/gpt-6-luna): image input and Structured Outputs, with a focused extraction workload. The Render configuration follows its [free-service limitations](https://render.com/docs/free) and [Deploy to Render guide](https://render.com/docs/deploy-to-render). Live provider access was verified on October 8; availability and account credits can change, so the game retains its local fallback.
+Node 22 or newer, no dependencies.
+
+```sh
+npm test                                   # 27 tests, providers mocked
+node --env-file=.env server.mjs            # http://localhost:4174
+```
+
+`.env` is ignored by Git; copy `.env.example`. Two billable scripts reproduce the measurements above and read the key from the env file without printing it: `scripts/recognition-accuracy.mjs` (compares recognition settings on a folder of photos) and `scripts/offline-style-test.mjs` (paints test arenas at several qualities).
+
+| Variable | Purpose | Default |
+| --- | --- | --- |
+| `OPENAI_API_KEY` | Server-side OpenAI project key | — |
+| `OPENAI_MODEL` | Vision model for recognition and AI Colors | Blueprint: `gpt-6-luna` |
+| `OPENAI_IMAGE_MODEL` | Arena painter; empty disables painting | `gpt-image-2` |
+| `SCENE_QUALITY` | `low`, `medium` or `high` | `medium` |
+| `RECOGNIZE_DETAIL` / `RECOGNIZE_REASONING` | Vision image detail / reasoning effort | `high` / `none` |
+| `SCENE_ENABLED`, `SCENE_PER_HOUR`, `SCENE_MAX_PER_DAY`, `SCENE_MAX_CONCURRENT` | Painting switch and caps | `true`, 3, 40, 2 |
+| `RECOGNIZE_PER_MINUTE` | Recognition rate per address | 5 |
+| `AI_PER_MINUTE`, `AI_MAX_CALLS`, `AI_MAX_CONCURRENT` | AI Colors limits | 5, 50, 2 |
+| `ALLOWED_ORIGINS`, `AI_REQUIRE_ORIGIN` | Exact allowed origins; require an Origin | portfolio + localhost:4173; Blueprint `true` |
+| `MODELSCOPE_API_KEY`, `MODELSCOPE_IMAGE_MODEL`, `SCENE_PROVIDER`, `SCENE_FALLBACK`, `STYLE_REFERENCE_URLS` | Optional free Qwen painter (below) | unset |
+| `PORT` / `HOST` | Render provides `PORT` | 4174 / `0.0.0.0` |
+
+**Optional free painter.** When `MODELSCOPE_API_KEY` is set, painting first tries ModelScope API-Inference with a Qwen image model, sending only the text prompt and the public URLs of the game's own stages, never the player's photo, and falls back to OpenAI on failure. It is not active on the live service: registration needs a mainland China phone number and an Alibaba Cloud account with real-name verification, and its request shape still needs one live check.
+
+## Deploy
+
+1. Import this repository's `render.yaml` with the deploy link above and choose the Free plan. The Blueprint sets Node 22, `npm start`, the `/health` check, the models, the caps and the allowed origin `https://toooonyliu.github.io`.
+2. Enter `OPENAI_API_KEY` in Render's private environment settings. Never paste a key into chat, the repository, the frontend or a screenshot.
+3. Copy the service URL from Render, confirm `/health`, and set it in the frontend's `one-cut-api-base` meta tag.
+
+Render's free service sleeps after 15 idle minutes and takes about a minute to wake; the game warms `/health` and shows progress before sending a photo.
+
+## Privacy
+
+There are no accounts, database or stored photos. A photo is handled in memory for one request. It is sent to OpenAI only for place recognition and AI Colors; the painter never receives it, only a text description and the game's own stages (`/api/scenes` uses the photo solely as part of its short-lived cache key). Requests use `store: false`, which does not by itself disable the provider's own abuse-monitoring retention. Only use photos you own or may share. See OpenAI's [data controls](https://developers.openai.com/api/docs/guides/your-data).
+
+## Layout
+
+```
+server.mjs            HTTP server wiring
+server/scene.js       Recognition and painting adapters, prompts, schemas
+server/scene-http.js  Photo-stage routes, caps, cache, jobs
+server/jobs.js        In-memory job store
+server/avatar.js      AI Colors adapter
+server/http.js        AI Colors route, CORS, body limits, /health
+server/image.js       Image validation (format, size, dimensions)
+assets/style/         The game's own stages, sent as style references
+scripts/              Billable measurement scripts
+tests/                node:test suites with mocked providers
+render.yaml           Render Blueprint
+```
