@@ -1,7 +1,7 @@
 // Photo arena routes: recognize a place, then paint a backdrop as a polled job.
 // Caps are demo guards in memory; the prepaid provider balance is the hard limit.
 import { createHash } from 'node:crypto';
-import { recognizePlace, paintBackdrop, buildBackdropPrompt, ZONES, SETTINGS, LIGHTINGS, SCENE_PROMPT_PATTERN, PLACE_NAME_PATTERN } from './scene.js';
+import { recognizePlace, paintArena, buildBackdropPrompt, ZONES, SETTINGS, LIGHTINGS, SCENE_PROMPT_PATTERN, PLACE_NAME_PATTERN } from './scene.js';
 import { validateImageData } from './image.js';
 import { allowedOrigins, readBody, sendJson, DEFAULT_ALLOWED_ORIGINS } from './http.js';
 import { createJobStore } from './jobs.js';
@@ -23,7 +23,7 @@ export function createSceneRoutes(options = {}) {
   const now = options.now || Date.now;
   const jobs = createJobStore({ maxJobs: options.maxJobs ?? 20, ttlMs: options.jobTtlMs ?? 600_000, now });
   const recognizer = options.recognize || recognizePlace;
-  const painter = options.paint || paintBackdrop;
+  const painter = options.paint || paintArena;
   const recognizeHits = new Map(), sceneHits = new Map(), cache = new Map();
   let dayHits = [], inFlight = 0;
   const recent = (map, ip, windowMs) => {
@@ -67,13 +67,15 @@ export function createSceneRoutes(options = {}) {
       if (!data || typeof data !== 'object' || Array.isArray(data)) throw fail('Send a JSON object.', 400);
       if (url.pathname === '/api/recognize-place') {
         const keys = Object.keys(data);
-        if (!keys.includes('image') || keys.some(key => !['image', 'zone'].includes(key))) throw fail('Send only image and an optional zone.', 400);
+        if (!keys.includes('image') || keys.some(key => !['image', 'zone', 'gps', 'exclude'].includes(key))) throw fail('Send image with optional zone, gps and exclude.', 400);
         validateImageData(data.image);
         if (data.zone !== undefined && !ZONES.includes(data.zone)) throw fail('Choose a valid travel zone.', 400);
+        if (data.gps !== undefined && data.gps !== null && !(data.gps && typeof data.gps === 'object' && !Array.isArray(data.gps) && Object.keys(data.gps).length === 2 && Number.isFinite(data.gps.lat) && Number.isFinite(data.gps.lon) && Math.abs(data.gps.lat) <= 90 && Math.abs(data.gps.lon) <= 180)) throw fail('Photo coordinates are invalid.', 400);
+        if (data.exclude !== undefined && data.exclude !== null && (!Array.isArray(data.exclude) || data.exclude.length > 3 || data.exclude.some(item => typeof item !== 'string' || !PLACE_NAME_PATTERN.test(item.trim())))) throw fail('Excluded places must be up to three plain names.', 400);
         const hits = recent(recognizeHits, ip, 60_000);
         if (hits.length >= recognizePerMinute || (recognizeHits.size >= 10_000 && !recognizeHits.has(ip))) throw fail('Recognition limit reached. Try later or choose the zone yourself.', 429, 60);
         reserve(recognizeHits, ip, hits);
-        const { place } = await recognizer({ image: data.image, zone: data.zone }, options.provider);
+        const { place } = await recognizer({ image: data.image, zone: data.zone, gps: data.gps ?? undefined, exclude: data.exclude ?? undefined }, options.provider);
         sendJson(res, 200, { place, source: 'ai' });
         return true;
       }

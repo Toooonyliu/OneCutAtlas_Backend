@@ -22,7 +22,7 @@ services:
       - key: OPENAI_IMAGE_MODEL
         value: gpt-image-2
       - key: SCENE_QUALITY
-        value: low
+        value: medium
       - key: SCENE_ENABLED
         value: "true"
       - key: SCENE_PER_HOUR
