@@ -12,6 +12,8 @@ export const STYLES = ['kendo', 'suit', 'cowboy', 'traveler'];
 export const SETTINGS = ['exterior', 'interior'];
 export const QUALITIES = ['low', 'medium', 'high', 'auto'];
 export const BACKDROP_SIZE = '1536x864';
+/** Used when OPENAI_IMAGE_MODEL is unset so a Blueprint-created service paints without a dashboard edit; set the variable to override. */
+export const DEFAULT_IMAGE_MODEL = 'gpt-image-2';
 /** Letters, digits and plain punctuation only: the prompt slot can carry no markup or instructions. */
 export const SCENE_PROMPT_PATTERN = /^[A-Za-z0-9 ,.;:'()\-]{20,300}$/;
 
@@ -170,7 +172,7 @@ export function loadStyleReferences(directory = DEFAULT_STYLE_DIR) {
 export async function paintBackdrop({ prompt } = {}, options = {}) {
   if (typeof prompt !== 'string' || prompt.length < 100 || prompt.length > 2400) throw fail('Backdrop prompt is invalid.');
   const apiKey = options.apiKey ?? process.env.OPENAI_API_KEY;
-  const model = options.imageModel ?? process.env.OPENAI_IMAGE_MODEL;
+  const model = options.imageModel ?? (process.env.OPENAI_IMAGE_MODEL || DEFAULT_IMAGE_MODEL);
   const quality = options.quality ?? process.env.SCENE_QUALITY ?? 'low';
   const size = options.size ?? BACKDROP_SIZE;
   if (!apiKey) throw fail('Arena painting is not configured. Preset arenas still work.', 503);

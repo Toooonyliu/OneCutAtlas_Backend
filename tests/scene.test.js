@@ -101,6 +101,8 @@ test('painting sends a multipart edit with reference stages or a JSON generation
 test('painting failures stay public-safe and never call the provider when unconfigured', async () => {
   let calls = 0;
   await assert.rejects(paintBackdrop({ prompt: buildBackdropPrompt(request) }, { ...provider, imageModel: '', fetch: () => { calls++; } }), { status: 503 });
+  const previous = process.env.OPENAI_IMAGE_MODEL; delete process.env.OPENAI_IMAGE_MODEL;
+  try { let body; await paintBackdrop({ prompt: buildBackdropPrompt(request) }, { ...provider, imageModel: undefined, fetch: async (url, options) => { body = options.body; return imageResponse(); } }); assert.equal(body.get('model'), 'gpt-image-2'); } finally { if (previous !== undefined) process.env.OPENAI_IMAGE_MODEL = previous; }
   await assert.rejects(paintBackdrop({ prompt: buildBackdropPrompt(request) }, { ...provider, quality: 'ultra', fetch: () => { calls++; } }), { status: 503 });
   assert.equal(calls, 0);
   const rejected = await paintBackdrop({ prompt: buildBackdropPrompt(request) }, { ...provider, fetch: async () => ({ ok: false, status: 400, json: async () => ({ error: { message: 'secret provider detail' } }) }) }).catch(error => error);
@@ -214,7 +216,7 @@ test('scene routes enforce origins, preflight and the production origin requirem
     assert.equal(accepted.headers.get('access-control-allow-origin'), 'https://toooonyliu.github.io');
     const health = await (await fetch(`${base}/health`)).json();
     assert.equal(typeof health.arenaPaintingConfigured, 'boolean');
-    assert.equal(health.arenaPaintingConfigured, Boolean(process.env.OPENAI_API_KEY && process.env.OPENAI_MODEL && process.env.OPENAI_IMAGE_MODEL));
+    assert.equal(health.arenaPaintingConfigured, Boolean(process.env.OPENAI_API_KEY && process.env.OPENAI_MODEL) && process.env.OPENAI_IMAGE_MODEL !== '');
     const root = await (await fetch(base)).json();
     assert.equal(root.routes.scenes, '/api/scenes');
   });

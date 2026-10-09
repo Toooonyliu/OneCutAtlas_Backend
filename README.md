@@ -60,7 +60,7 @@ Environment variables:
 | --- | --- |
 | `OPENAI_API_KEY` | Private server-side OpenAI project key |
 | `OPENAI_MODEL` | Explicit model with image input and Structured Outputs; Blueprint chooses `gpt-6-luna`, no hidden adapter default |
-| `OPENAI_IMAGE_MODEL` | Image model for arena painting; Blueprint chooses `gpt-image-2`. Empty disables painting |
+| `OPENAI_IMAGE_MODEL` | Image model for arena painting; defaults to `gpt-image-2` when unset, an empty value disables painting |
 | `SCENE_QUALITY` | `low` (default), `medium` or `high` for painted arenas |
 | `SCENE_ENABLED` | `false` switches arena painting off while recognition keeps working |
 | `SCENE_PER_HOUR` / `SCENE_MAX_PER_DAY` / `SCENE_MAX_CONCURRENT` | Painting caps: per address per hour (3), per service per day (40), in flight (2) |

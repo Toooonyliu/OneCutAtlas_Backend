@@ -58,7 +58,7 @@ export function createAvatarRoute(options = {}) {
       if (!['GET', 'HEAD'].includes(req.method)) sendJson(res, 405, { error: 'Use GET.' });
       else {
         const configured = Boolean(process.env.OPENAI_API_KEY && process.env.OPENAI_MODEL);
-        const painting = configured && Boolean(process.env.OPENAI_IMAGE_MODEL) && !['false', '0'].includes(String(process.env.SCENE_ENABLED ?? 'true').toLowerCase());
+        const painting = configured && process.env.OPENAI_IMAGE_MODEL !== '' && !['false', '0'].includes(String(process.env.SCENE_ENABLED ?? 'true').toLowerCase());
         const readiness = { status: 'ok', avatarAnalysisConfigured: configured, placeRecognitionConfigured: configured, arenaPaintingConfigured: painting };
         sendJson(res, 200, url.pathname === '/health' ? readiness : {
           service: 'One Cut Atlas avatar API', ...readiness,
